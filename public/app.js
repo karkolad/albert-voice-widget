@@ -6,14 +6,14 @@ const label = document.getElementById("callLabel");
 
 let conversation = null;
 
-function setUI(state) {
+function setUI(state, msg) {
   switch (state) {
     case "ready":
       status.textContent = "Připraveno";
       status.className = "status";
       btn.className = "call-btn";
       btn.disabled = false;
-      label.textContent = "Zavolat Albertovi";
+      label.textContent = "🎙️ Zavolat Albertovi";
       break;
     case "connecting":
       status.textContent = "Připojuji se...";
@@ -23,18 +23,25 @@ function setUI(state) {
       label.textContent = "Čekejte...";
       break;
     case "active":
-      status.textContent = "Probíhá hovor...";
+      status.textContent = "🔴 Probíhá hovor — mluvte";
       status.className = "status active";
       btn.className = "call-btn active";
       btn.disabled = false;
-      label.textContent = "Ukončit hovor";
+      label.textContent = "⏹ Ukončit hovor";
       break;
     case "ended":
-      status.textContent = "Hovor ukončen";
+      status.textContent = msg || "Hovor ukončen";
       status.className = "status ended";
       btn.className = "call-btn";
       btn.disabled = false;
-      label.textContent = "Zavolat znovu";
+      label.textContent = "🎙️ Zavolat znovu";
+      break;
+    case "error":
+      status.textContent = msg || "Chyba";
+      status.className = "status ended";
+      btn.className = "call-btn";
+      btn.disabled = false;
+      label.textContent = "🎙️ Zkusit znovu";
       break;
   }
 }
@@ -42,9 +49,17 @@ function setUI(state) {
 async function startCall() {
   setUI("connecting");
 
+  // Nejdřív požádat o mikrofon
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    setUI("error", "❌ Přístup k mikrofonu zamítnut");
+    return;
+  }
+
   try {
     const res = await fetch("/api/signed-url");
-    if (!res.ok) throw new Error("Nepodařilo se získat signed URL");
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
     const { signed_url } = await res.json();
 
     conversation = await Conversation.startSession({
@@ -57,14 +72,12 @@ async function startCall() {
       onError: (err) => {
         console.error("Conversation error:", err);
         conversation = null;
-        setUI("ended");
-        status.textContent = "Chyba spojení";
+        setUI("error", "❌ Chyba: " + (err?.message || err));
       },
     });
   } catch (err) {
     console.error("Start call error:", err);
-    setUI("ended");
-    status.textContent = "Nepodařilo se připojit";
+    setUI("error", "❌ " + err.message);
   }
 }
 
@@ -83,3 +96,6 @@ btn.addEventListener("click", () => {
     startCall();
   }
 });
+
+// Inicializace
+setUI("ready");
